@@ -1,0 +1,38 @@
+{
+  "groups": {
+    "id": 1,
+    "type": "Group",
+    "chats": [
+      {
+        "id": 1,
+        "addedBy": "Carlos",
+        "addedById": 101,
+        "date": "2025-11-04T09:00:00"
+      }
+    ]
+  },
+  "channels": {
+    "id": 2,
+    "nombre": "Canal de Noticias",
+    "chats": [
+      {
+        "id": 1,
+        "addedBy": "Carlos",
+        "addedById": 101,
+        "date": "2025-11-04T09:00:00"
+      }
+    ]
+  },
+  "private": {
+    "id": 3,
+    "type": "Private chat",
+    "chats": [
+      {
+        "id": 751930987,
+        "user": "Jason",
+        "active": true,
+        "date": "2025-11-04T11:00:00"
+      }
+    ]
+  }
+}
