@@ -1,72 +1,44 @@
 #!/bin/bash
-
-# === Validar argumentos ===
-[[ $# -ne 2 ]] && {
-    echo "Uso: $0 <script.py> \"<intervalo>\""
-    echo ""
-    echo "Ejemplos:"
-    echo "  $0 sender.py \"00:05\"          # Cada 5 min"
-    echo "  $0 sender.py \"01:00\"          # Cada hora"
-    echo "  $0 sender.py \"02:00\"          # Cada 2 horas"
-    echo "  $0 sender.py \"daily 09:30\"    # Diaria 9:30"
-    echo "  $0 sender.py \"monday 23:00\"   # Lunes 23:00"
-    echo "  $0 sender.py \"sunday 03:15\"   # Domingo 3:15"
-    echo ""
-    exit 1
-}
+# croner.sh
+# Uso: ./croner.sh <script.py> "<intervalo>" <ruta_venv> "<comentario_opcional>" [<script_args>...]
+# Ejemplo:
+# ./croner.sh workers/sender.py "every 00:05" ./venv "Every 5 minutes" "/home/user/videos/" 3
 
 SCRIPT="$1"
 INTERVAL="$2"
-VENV_PYTHON="venv/bin/python"
+VENV_PATH="$3"
+COMMENT="$4"
+shift 4
+SCRIPT_ARGS="$*"
+PYTHON="$VENV_PATH/bin/python"
 LOG_FILE="$HOME/croner_jobs.log"
 
-# === Validar script ===
-[[ ! -f "$SCRIPT" ]] && { echo "ERROR: Script no encontrado: $SCRIPT"; exit 1; }
-[[ ! -x "$SCRIPT" ]] && { echo "Dando permisos..."; chmod +x "$SCRIPT"; }
-
-# === Parsear intervalo: [day] HH:MM ===
+# --- Parse básico ---
 DAY=""
-TIME_PART=""
+TIME="$INTERVAL"
 
-# Separar día (si existe)
 if [[ "$INTERVAL" == *" "* ]]; then
-    DAY=$(echo "$INTERVAL" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]')
-    TIME_PART=$(echo "$INTERVAL" | cut -d' ' -f2)
-else
-    TIME_PART="$INTERVAL"
+    DAY=$(echo "$INTERVAL" | cut -d' ' -f1)
+    TIME=$(echo "$INTERVAL" | cut -d' ' -f2)
 fi
 
-# Validar formato HH:MM
-if ! [[ "$TIME_PART" =~ ^([0-9]{2}):([0-9]{2})$ ]]; then
-    echo "ERROR: Formato de hora inválido: $TIME_PART (usa HH:MM)"
-    exit 1
-fi
+HOUR=$(echo "$TIME" | cut -d':' -f1)
+MIN=$(echo "$TIME" | cut -d':' -f2)
 
-HOUR=${BASH_REMATCH[1]}
-MIN=${BASH_REMATCH[2]}
-
-[[ "$HOUR" -lt 0 || "$HOUR" -gt 23 || "$MIN" -lt 0 || "$MIN" -gt 59 ]] && {
-    echo "ERROR: Hora fuera de rango: $TIME_PART"
-    exit 1
-}
-
-# === Generar cron ===
-if [[ -z "$DAY" ]]; then
-    # Sin día → intervalo repetitivo
-    if [[ "$MIN" == "00" && "$HOUR" == "00" ]]; then
-        echo "ERROR: 00:00 no es válido para repetición"
-        exit 1
-    elif [[ "$MIN" != "00" ]]; then
-        # Cada X minutos
+# --- Construcción del cron ---
+if [[ "$DAY" == "every" ]]; then
+    # every HH:MM → repetición cada X minutos o cada X horas
+    if [[ "$HOUR" == "00" && "$MIN" != "00" ]]; then
         CRON="*/$MIN * * * *"
-    else
-        # Cada X horas
+    elif [[ "$MIN" == "00" && "$HOUR" != "00" ]]; then
         CRON="0 */$HOUR * * *"
+    else
+        CRON="$MIN $HOUR * * *"
     fi
+elif [[ -z "$DAY" || "$DAY" == "daily" ]]; then
+    CRON="$MIN $HOUR * * *"
 else
-    # Con día
     case "$DAY" in
-        daily)     CRON="$MIN $HOUR * * *" ;;
         monday)    CRON="$MIN $HOUR * * 1" ;;
         tuesday)   CRON="$MIN $HOUR * * 2" ;;
         wednesday) CRON="$MIN $HOUR * * 3" ;;
@@ -78,11 +50,15 @@ else
     esac
 fi
 
-# === Añadir a crontab ===
-CRON_LINE="$CRON $VENV_PYTHON \"$SCRIPT\" >> $LOG_FILE 2>&1"
-(crontab -l 2>/dev/null | grep -v -F "$SCRIPT"; echo "$CRON_LINE") | crontab -
+# --- Línea cron final ---
+SCRIPT_PATH=$(realpath "$SCRIPT")
+if [[ -n "$COMMENT" ]]; then
+    CRON_LINE="$CRON $PYTHON \"$SCRIPT_PATH\" $SCRIPT_ARGS >> \"$LOG_FILE\" 2>&1 # $COMMENT"
+else
+    CRON_LINE="$CRON $PYTHON \"$SCRIPT_PATH\" $SCRIPT_ARGS >> \"$LOG_FILE\" 2>&1"
+fi
 
-# === Confirmación ===
-echo "Cron creado:"
-echo "   $INTERVAL → $CRON"
-echo "   $CRON_LINE"
+# --- Actualizar crontab ---
+(crontab -l 2>/dev/null | grep -v -F "$SCRIPT_PATH"; echo "$CRON_LINE") | crontab -
+
+echo "Cron ajouté : $CRON_LINE"

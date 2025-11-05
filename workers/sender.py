@@ -2,6 +2,7 @@ import os
 import json
 import random
 import asyncio
+import sys
 from telegram import Bot
 from dotenv import load_dotenv
 
@@ -9,10 +10,21 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
+# --- Arguments ---
+if len(sys.argv) < 3:
+    print("Usage: python sender.py <video_folder> <num_videos>")
+    sys.exit(1)
+
+VIDEO_FOLDER = sys.argv[1]
+try:
+    NUM_VIDEOS = int(sys.argv[2])
+except ValueError:
+    print("num_videos must be an integer")
+    sys.exit(1)
+
 # --- Paths ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHATS_JSON = os.path.join(BASE_DIR, "data", "chats.json")
-VIDEO_FOLDER = os.path.join(BASE_DIR, "assets", "videos")
 
 # --- Functions ---
 def load_private_chats():
@@ -70,8 +82,8 @@ async def main():
     print(f"Active chats loaded: {active_chat_ids}")
     
     # send videos in a loop
-    for i in range(5):
-        print(f"--- Sending Video {i+1}/5 ---")
+    for i in range(NUM_VIDEOS):
+        print(f"--- Sending Video {i+1}/{NUM_VIDEOS} ---")
         tasks = [send_random_video(chat_id, bot) for chat_id in active_chat_ids]
         await asyncio.gather(*tasks)
         await asyncio.sleep(2)
